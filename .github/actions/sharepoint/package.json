@@ -1,0 +1,18 @@
+{
+    "name": "sta-azure-helper",
+    "version": "1.0.0",
+    "type": "module",
+    "main": "sharepoint.js",
+    "scripts": {
+      "test": "echo \"Error: no test specified\" && exit 1",
+      "lint": "eslint .",
+      "lint:fix": "eslint --fix ."
+    },
+    "author": "Experience Catalyst",
+    "license": "ISC",
+    "description": "SharePoint",
+    "dependencies": {
+      "@actions/core": "^1.11.1",
+      "node-forge": "^1.3.1"
+    }
+  }

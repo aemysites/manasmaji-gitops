@@ -1,0 +1,63 @@
+name: "Create SharePoint folder"
+description: "Create SharePoint folder and optionally share with users"
+author: "Experience Catalyst"
+inputs:
+  tenant_id:
+    description: "The tenant id"
+    required: true
+  client_id:
+    description: "The client id"
+    required: true
+  key:
+    description: "Base64-encoded PFX content associated with the Azure app"
+    required: true
+  password:
+    description: "Password to decrypt the PFX content. Mandatory if the cert was created with a password."
+    required: false
+  thumbprint:
+    description: "The Azure app's certificate thumbprint"
+    required: true
+  duration:
+    description: "Estimate of the number of seconds that the access_token should be valid for. Default is 3600 seconds."
+    default: "3600"
+    required: false
+  sp_host:
+    description: "SharePoint host (e.g., 'adobe.sharepoint.com')"
+    required: true
+  sp_site_path:
+    description: "SharePoint site path (e.g., 'AEMDemos')"
+    required: true
+  sp_folder_path:
+    description: "SharePoint folder path (e.g., 'Shared%20Documents/sites/my-site')"
+    required: true
+  sp_owner:
+    description: "Optional owner email address for setting folder permissions"
+    required: false
+  test_folder_path:
+    description: "Name of the test folder to create (defaults to 'test-folder')"
+    default: "test-folder"
+    required: false
+outputs:
+  access_token:
+    description: "OAuth 2.0 access token from Azure AD"
+  drive_id:
+    description: "SharePoint drive ID where the folder was created"
+  folder_id:
+    description: "ID of the created folder"
+  folder_url:
+    description: "Direct URL to the folder location"
+  sharing_link:
+    description: "Shareable link for the created folder"
+  folder_web_url:
+    description: "Web URL to access the folder"
+  user_to_invite:
+    description: "Email address that was invited (if sp_owner was provided)"
+  sharing_success:
+    description: "Indicates if sharing was successful"
+  test_folder_path:
+    description: "The actual test folder path that was created"
+  error_message:
+    description: "Error message if the operation failed"
+runs:
+  using: 'node20'
+  main: 'sharepoint.js'

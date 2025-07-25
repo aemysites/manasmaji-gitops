@@ -1,0 +1,234 @@
+# This is the main setup workflow for AEMY
+
+name: Setup
+
+# Controls when the workflow will run
+on:
+  issues:
+    types: [labeled]
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  create-repository:
+    runs-on: ubuntu-latest
+    if: |
+      contains(
+        join(github.event.issue.labels.*.name, ','),
+        'access'
+      )
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v4
+
+      # Create new repository in aemdemos organization
+      - name: Create new repository
+        run: |
+          # Parse inputs from issue title and body
+          ISSUE_TITLE="${{ github.event.issue.title }}"
+          ISSUE_BODY="${{ github.event.issue.body }}"
+
+          # Extract repository name (look for patterns like "repo: name" or "repository: name")
+          REPO_NAME=$(echo "$ISSUE_BODY" | awk '/^### Repository Name/{getline; while($0 ~ /^\s*$/){getline}; print; exit}' | sed 's/^\s*//;s/\s*$//')
+          USERNAME=$(echo "$ISSUE_BODY" | awk '/^### GitHub ID/{getline; while($0 ~ /^\s*$/){getline}; print; exit}' | sed 's/^\s*//;s/\s*$//')
+          STORAGE_USERNAME=$(echo "$ISSUE_BODY" | awk '/^### Adobe ID/{getline; while($0 ~ /^\s*$/){getline}; print; exit}' | sed 's/^\s*//;s/\s*$//')
+          PROJECT_TYPE=$(echo "$ISSUE_BODY" | awk '/^### Project Type/{getline; while($0 ~ /^\s*$/){getline}; print; exit}' | sed 's/^\s*//;s/\s*$//' | tr '[:upper:]' '[:lower:]')
+
+          # Fallback to issue creator if username not found
+          if [ -z "$USERNAME" ]; then
+            USERNAME="${{ github.event.issue.user.login }}"
+          fi
+
+          # Fallback to issue title if repository name not found
+          if [ -z "$REPO_NAME" ]; then
+            REPO_NAME="${{ github.event.issue.title }}"
+          fi
+
+          # Set default folder type to da if not specified
+          if [ -z "$PROJECT_TYPE" ]; then
+            PROJECT_TYPE="da"
+          fi
+
+          # Clean repository name (remove special characters, convert to lowercase)
+          CLEAN_REPO_NAME=$(echo "$REPO_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g' | sed 's/--*/-/g' | sed 's/^-//;s/-$//')
+
+          # Validate that we have a valid repository name
+          if [ -z "$CLEAN_REPO_NAME" ]; then
+            echo "Error: Invalid repository name after sanitization"
+            exit 1
+          fi
+
+          echo "Creating repository: $CLEAN_REPO_NAME in aemysites organization"
+          echo "Requested by: $USERNAME"
+          echo "Original repository name: $REPO_NAME"
+          echo "Adobe ID: $STORAGE_USERNAME"
+          echo "Project type: $PROJECT_TYPE"
+          echo "Using template: aemysites/sta-boilerplate"
+
+          # Create repository using GitHub API with template (properly escaped JSON)
+          RESPONSE=$(curl -s -w "%{http_code}" -X POST \
+            -H "Authorization: token ${{ secrets.GH_PAT }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            https://api.github.com/repos/aemysites/sta-boilerplate/generate \
+            -d "{
+              \"name\": \"$CLEAN_REPO_NAME\",
+              \"owner\": \"aemysites\",
+              \"description\": \"Repository created by AEMY setup workflow using AEM boilerplate template\",
+              \"private\": false
+            }")
+
+          # Extract HTTP status code (last line)
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          # Extract response body (all lines except last)
+          RESPONSE_BODY=$(echo "$RESPONSE" | head -n -1)
+
+          if [ "$HTTP_CODE" -eq 201 ]; then
+            echo "Repository created successfully!"
+            echo "Repository URL: https://github.com/aemysites/$CLEAN_REPO_NAME"
+
+            # Store the cleaned repository name for the next step
+            echo "REPO_NAME=$CLEAN_REPO_NAME" >> $GITHUB_ENV
+            echo "USERNAME=$USERNAME" >> $GITHUB_ENV
+            echo "STORAGE_USERNAME=$STORAGE_USERNAME" >> $GITHUB_ENV
+            echo "PROJECT_TYPE=$PROJECT_TYPE" >> $GITHUB_ENV
+            echo "REPO_CREATED=true" >> $GITHUB_ENV
+          else
+            echo "Error: Failed to create repository"
+            echo "HTTP Code: $HTTP_CODE"
+            echo "Response: $RESPONSE_BODY"
+            exit 1
+          fi
+
+      # Add user as admin to the repository
+      - name: Add user as admin
+        if: env.REPO_CREATED == 'true'
+        run: |
+          echo "Adding ${{ env.USERNAME }} as admin to repository: ${{ env.REPO_NAME }}"
+
+          # Add collaborator with admin permissions using GitHub API
+          RESPONSE=$(curl -s -w "%{http_code}" -X PUT \
+            -H "Authorization: token ${{ secrets.GH_PAT }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            https://api.github.com/repos/aemysites/${{ env.REPO_NAME }}/collaborators/${{ env.USERNAME }} \
+            -d '{
+              "permission": "admin"
+            }')
+
+          # Extract HTTP status code (last line)
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          # Extract response body (all lines except last)
+          RESPONSE_BODY=$(echo "$RESPONSE" | head -n -1)
+
+          if [ "$HTTP_CODE" -eq 204 ] || [ "$HTTP_CODE" -eq 201 ]; then
+            echo "Successfully added ${{ env.USERNAME }} as admin to ${{ env.REPO_NAME }}"
+            echo "COLLABORATOR_ADDED=true" >> $GITHUB_ENV
+          else
+            echo "Warning: Failed to add collaborator"
+            echo "HTTP Code: $HTTP_CODE"
+            echo "Response: $RESPONSE_BODY"
+            echo "COLLABORATOR_ADDED=false" >> $GITHUB_ENV
+          fi
+
+      - name: Set sharepoint action
+        if: env.PROJECT_TYPE == 'sharepoint'
+        run: |
+          cd .github/actions/sharepoint
+          npm install
+
+      - name: Set da action
+        if: env.PROJECT_TYPE == 'da'
+        run: |
+          cd .github/actions/da
+          npm install
+
+      # Create SharePoint folder and add user as admin
+      - name: Create SharePoint folder
+        if: env.PROJECT_TYPE == 'sharepoint'
+        uses: ./.github/actions/sharepoint
+        id: sharepoint
+        with:
+          tenant_id: ${{ vars.AZURE_TENANT_ID }}
+          client_id: ${{ vars.AZURE_CLIENT_ID }}
+          key: ${{ secrets.AZURE_PRIVATE_KEY_BASE64 }}
+          password: ${{ secrets.AZURE_PFX_PASSWORD }}
+          thumbprint: ${{ secrets.AZURE_THUMBPRINT }}
+          sp_host: 'adobe.sharepoint.com'
+          sp_site_path: 'AEMDemos'
+          sp_folder_path: 'Shared%20Documents/sites/aemy-sites'
+          sp_owner: ${{ env.STORAGE_USERNAME }}
+          test_folder_path: ${{ env.REPO_NAME }}
+
+      # Create DA folder and add write permission for user 
+      - name: Create DA folder
+        if: env.PROJECT_TYPE == 'da'
+        uses: ./.github/actions/da
+        id: da
+        with:
+          da_ims_token: ${{ secrets.DA_IMS_TOKEN }}
+          da_admin_host: 'https://admin.da.live'
+          da_org_path: 'AEMDemos'
+          da_site_path: 'aemy-sites'
+          da_owner: ${{ env.STORAGE_USERNAME }}
+          test_folder_path: ${{ env.REPO_NAME }}
+
+      # Close the issue with a summary comment
+      - name: Close issue
+        if: github.event_name == 'issues'
+        run: |
+          # Create a summary comment
+          if [ "${{ env.REPO_CREATED }}" = "true" ]; then
+            if [ "${{ env.PROJECT_TYPE }}" = "da" ]; then
+              STORAGE_NAME="Document Authoring"
+              FOLDER_URL="https://da.live/#/AEMDemos/aemy-sites/${{ env.REPO_NAME }}"
+            else
+              STORAGE_NAME="SharePoint"
+              FOLDER_URL="https://adobe.sharepoint.com/:f:/r/sites/AEMDemos/Shared%20Documents/sites/aemy-sites/${{ env.REPO_NAME }}"
+            fi
+
+            COMMENT="## ✅ Repository and ${STORAGE_NAME} Setup Complete!
+
+            **Repository**: [aemysites/${{ env.REPO_NAME }}](https://github.com/aemysites/${{ env.REPO_NAME }})
+            **Admin User**: @${{ env.USERNAME }}
+            **Template**: [aemdemos/sta-boilerplate](https://github.com/aemdemos/sta-boilerplate)
+            **Project Type**: ${STORAGE_NAME}
+
+            Your AEM repository has been successfully created using the AEM boilerplate template and you have been added as an admin. A corresponding ${STORAGE_NAME} folder has also been set up.
+
+            ### User Response
+
+            Hello,
+            we setup a github repository and ${STORAGE_NAME} folder for you. Make sure that you accept
+            the two invite emails, one for the github repository and one for the ${STORAGE_NAME} folder.
+            Once you accepted the invites, you are ready to follow the tutorial [tutorial](https://github.com/aemysites/aemydocs/blob/main/tutorial.md).
+
+            1. Your github repository: \`https://github.com/aemysites/${{ env.REPO_NAME }}\`
+            2. Your ${STORAGE_NAME} folder: \`${FOLDER_URL}\`
+
+            ---
+            *This issue will be automatically closed.*"
+          else
+            COMMENT="## ❌ Repository Setup Failed
+
+            There was an error creating your repository. Please check the workflow logs for more details and try again.
+
+            ---
+            *This issue will be automatically closed.*"
+          fi
+
+          # Add comment to the issue
+          curl -X POST \
+            -H "Authorization: token ${{ secrets.GH_PAT }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments \
+            -d "$(jq -nc --arg body "$COMMENT" '{body: $body}')"
+
+          # Close the issue
+          curl -X PATCH \
+            -H "Authorization: token ${{ secrets.GH_PAT }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.issue.number }} \
+            -d '{
+              "state": "closed"
+            }'
+
+          echo "Issue closed successfully with summary comment"

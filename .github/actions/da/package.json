@@ -1,0 +1,20 @@
+{
+  "name": "da-action",
+  "version": "1.0.0",
+  "description": "GitHub Action for creating Document Authoring folders",
+  "main": "da.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "@actions/core": "^1.10.0"
+  },
+  "keywords": [
+    "github-actions",
+    "document-authoring",
+    "da"
+  ],
+  "author": "Experience Catalyst",
+  "license": "Apache-2.0"
+} 

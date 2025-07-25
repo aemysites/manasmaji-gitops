@@ -1,0 +1,33 @@
+name: Experience Catalyst Access
+description: Request access to experience catalyst
+title: "<Use Case>"
+body:
+  - type: input
+    attributes:
+      label: Repository Name
+      description: The name of the GitHub repository
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: GitHub ID
+      description: Your public github ID
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: Adobe ID
+      description: Your Adobe Email address
+    validations:
+      required: true
+  - type: dropdown
+    attributes:
+      label: Project Type
+      description: Choose the type of project setup you need
+      options:
+        - DA
+        - SharePoint
+      default: 0
+    validations:
+      required: true
+

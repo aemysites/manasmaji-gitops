@@ -1,0 +1,39 @@
+name: "Create DA site"
+description: "Create Document Authoring site and optionally share with users"
+author: "Experience Catalyst"
+inputs:
+  da_ims_token:
+    description: "Adobe IMS token for DA API access"
+    required: true
+  da_admin_host:
+    description: "Adobe DA admin host (e.g., 'https://admin.da.live')"
+    required: false
+  da_org_path:
+    description: "DA organisation path (equivalent to site path, e.g., 'AEMDemos')"
+    required: true
+  da_site_path:
+    description: "Parent folder path inside the org where the site will be created (e.g., 'aemy-sites')"
+    required: true
+  da_owner:
+    description: "Optional owner email address for setting write permissions via DA organization config"
+    required: false
+  test_folder_path:
+    description: "Name of the test folder to create (defaults to 'test-folder')"
+    default: "test-folder"
+    required: false
+outputs:
+  access_token:
+    description: "DA access token that was used for the API calls"
+  folder_url:
+    description: "Direct URL to the folder location"
+  folder_web_url:
+    description: "Web URL to access the folder"
+  permissions_updated:
+    description: "Indicates if DA permissions were successfully updated"
+  test_folder_path:
+    description: "The actual test folder path that was created"
+  error_message:
+    description: "Error message if the operation failed"
+runs:
+  using: 'node20'
+  main: 'da.js' 
